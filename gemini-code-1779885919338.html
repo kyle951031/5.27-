@@ -15,7 +15,7 @@
     .card { background: #ffffff; border-radius: 24px; box-shadow: 0 20px 40px rgba(16, 42, 67, 0.08); padding: 24px; }
     .period-select { width: 100%; padding: 14px 16px; border-radius: 16px; border: 1px solid #cbd5e1; background: #f8fafc; font-size: 1rem; }
     .video-frame { position: relative; background: #000; border-radius: 24px; overflow: hidden; min-height: 420px; display: grid; place-items: center; }
-    .scan-guide { position: absolute; top: 25%; left: 10%; width: 80%; height: 20%; border: 3px dashed #38bdf8; border-radius: 18px; pointer-events: none; box-shadow: 0 0 0 9999px rgba(0,0,0,0.5); }
+    .scan-guide { position: absolute; top: 25%; left: 10%; width: 80%; height: 20%; border: 3px dashed #2563eb; border-radius: 18px; pointer-events: none; box-shadow: 0 0 0 9999px rgba(0,0,0,0.5); }
     video { width: 100%; height: 100%; object-fit: cover; }
     .controls { margin-top: 18px; display: flex; flex-wrap: wrap; gap: 14px; }
     .primary-btn { flex: 1; min-width: 220px; border: none; border-radius: 999px; padding: 16px 24px; background: linear-gradient(135deg, #2563eb, #38bdf8); color: white; font-size: 1rem; font-weight: 700; cursor: pointer; transition: transform 0.2s ease, box-shadow 0.2s ease; }
@@ -29,8 +29,13 @@
     .data-card { padding: 16px 18px; background: #ffffff; border: 1px solid #d8e9f8; border-radius: 18px; display: flex; justify-content: space-between; align-items: center; }
     .data-card span { color: #334e68; }
     .data-card strong { font-size: 1.1rem; color: #0f172a; }
-    .chart-card { margin-top: 18px; padding: 18px; background: #ffffff; border: 1px solid #d8e9f8; border-radius: 24px; }
-    .chart-card canvas { width: 100% !important; height: auto !important; }
+    
+    /* 改用純 CSS 統計圖表，免除外部 JS 套件卡死風險 */
+    .chart-card { margin-top: 18px; padding: 20px; background: #ffffff; border: 1px solid #d8e9f8; border-radius: 24px; }
+    .progress-container { background: #e2e8f0; border-radius: 999px; height: 24px; width: 100%; overflow: hidden; margin-top: 10px; position: relative; }
+    .progress-bar { background: #10b981; height: 100%; width: 0%; transition: width 0.3s ease; }
+    .progress-text { position: absolute; width: 100%; text-align: center; top: 2px; font-size: 0.85rem; font-weight: bold; color: #0f172a; }
+
     #snapshotCanvas { display: none; }
     #previewCanvas { width: 100%; max-height: 260px; border-radius: 20px; background: #f8fafc; display: none; margin-top: 18px; border: 2px solid #cbd5e1; }
     .secondary-btn { flex: 1; min-width: 220px; border: 1px solid #2563eb; border-radius: 999px; padding: 16px 24px; background: white; color: #2563eb; font-size: 1rem; font-weight: 700; cursor: pointer; transition: transform 0.2s ease, box-shadow 0.2s ease; text-align: center; }
@@ -68,7 +73,7 @@
 
     <div class="info-card" style="margin-bottom: 18px; border-left: 5px solid #2563eb;">
       <strong>系統狀態：</strong>
-      <p id="statusText" class="result-text">正在載入中獎號碼與核心 OCR 辨識引擎...</p>
+      <p id="statusText" class="result-text">正在初始化核心 OCR 辨識引擎...</p>
     </div>
 
     <div class="layout">
@@ -136,7 +141,11 @@
           <div class="data-card"><span>總中獎率</span><strong id="winRate">0%</strong></div>
         </div>
         <div class="chart-card">
-          <canvas id="winnerChart"></canvas>
+          <p class="info-title" style="margin: 0;">中獎比率視覺化</p>
+          <div class="progress-container">
+            <div id="myProgressBar" class="progress-bar"></div>
+            <div id="myProgressText" class="progress-text">等待對獎數據...</div>
+          </div>
         </div>
       </section>
     </div>
@@ -144,7 +153,6 @@
     <div class="footer">© 2026 完全前端多期數智慧發票即時對獎系統 (精準單碼優化版)</div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.0.3/dist/tesseract.min.js"></script>
   <script>
     const LOCAL_PRIZE_DATA = {
@@ -153,7 +161,6 @@
     };
 
     let prizeData = LOCAL_PRIZE_DATA;
-    let chartInstance = null;
     let cameraStream = null;
     let totalScannedInvoices = 0; 
     let totalWins = 0;
@@ -193,23 +200,18 @@
     const totalCountEl = document.getElementById('totalCount');
     const winCountEl = document.getElementById('winCount');
     const winRateEl = document.getElementById('winRate');
-    const winnerChart = document.getElementById('winnerChart');
+    const myProgressBar = document.getElementById('myProgressBar');
+    const myProgressText = document.getElementById('myProgressText');
 
     async function loadPrizeJson() {
-      if (window.location.protocol === 'file:') {
-        statusText.textContent = '本機檔案模式(file://)已自動加載內置最新中獎資料。';
-        prizeData = LOCAL_PRIZE_DATA;
-        return;
-      }
       try {
-        statusText.textContent = '網路通訊正常，嘗試讀取外部獎號設定檔...';
         const response = await fetch('./prize.json', { cache: 'no-store' });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        if (!response.ok) throw new Error();
         prizeData = await response.json();
-        statusText.textContent = '中獎號碼設定同步成功！AI 引擎就緒。';
+        statusText.textContent = '中獎號碼已與遠端 JSON 同步！系統準備就緒。';
       } catch (error) {
         prizeData = LOCAL_PRIZE_DATA;
-        statusText.textContent = '未偵測到外部 prize.json，系統已切換至內建離線備援資料組。';
+        statusText.textContent = '已成功載入內建離線備援獎號。AI OCR 引擎就緒！';
       }
     }
 
@@ -264,7 +266,7 @@
 
       detectedNumbersEl.textContent = finalNumber;
       prizeResultEl.textContent = `${finalNumber} → ${resultText}`;
-      renderChart(totalScannedInvoices, totalWins);
+      updateUiStats(totalScannedInvoices, totalWins);
     }
 
     function confirmManualNumber() {
@@ -340,13 +342,11 @@
     function advancedImageProcessing(sourceCanvas) {
       const w = sourceCanvas.width;
       const h = sourceCanvas.height;
-      
       const scale = 2.0; 
       const canvas = document.createElement('canvas');
       canvas.width = Math.floor(w * scale);
       canvas.height = Math.floor(h * scale);
       const ctx = canvas.getContext('2d');
-      
       ctx.filter = 'contrast(300%) brightness(120%) saturate(0%)';
       ctx.drawImage(sourceCanvas, 0, 0, canvas.width, canvas.height);
       ctx.filter = 'none';
@@ -404,12 +404,9 @@
       const sData = sCtx.getImageData(0, 0, sharpCanvas.width, sharpCanvas.height);
       const sPixels = sData.data;
       const copyPixels = new Uint8ClampedArray(sPixels);
-      
-      const k = [ 0, -1,  0, 
-                 -1,  5, -1, 
-                  0, -1,  0]; 
-                  
+      const k = [ 0, -1,  0, -1,  5, -1,  0, -1,  0]; 
       const width = sharpCanvas.width;
+
       for (let y = 1; y < sharpCanvas.height - 1; y++) {
         for (let x = 1; x < width - 1; x++) {
           let res = 0;
@@ -421,11 +418,9 @@
             }
           }
           const targetIdx = (y * width + x) * 4;
-          const finalVal = Math.min(255, Math.max(0, res));
-          sPixels[targetIdx] = sPixels[targetIdx+1] = sPixels[targetIdx+2] = finalVal;
+          sPixels[targetIdx] = sPixels[targetIdx+1] = sPixels[targetIdx+2] = Math.min(255, Math.max(0, res));
         }
       }
-      
       sCtx.putImageData(sData, 0, 0);
       return sharpCanvas;
     }
@@ -473,7 +468,6 @@
                 if (pureDigits.length === 8 && isValidInvoiceCandidate(pureDigits)) {
                   const box = word.bbox;
                   const area = (box.x1 - box.x0) * (box.y1 - box.y0);
-                  
                   if (!candidatesMap.has(pureDigits) || candidatesMap.get(pureDigits) < area) {
                     candidatesMap.set(pureDigits, area);
                   }
@@ -487,7 +481,6 @@
       }
 
       if (candidatesMap.size === 0) return null;
-
       const sortedByArea = Array.from(candidatesMap.entries()).sort((a, b) => b[1] - a[1]);
       return sortedByArea[0][0]; 
     }
@@ -518,22 +511,15 @@
       return '未中獎';
     }
 
-    function renderChart(totalCount, winCount) {
-      const loseCount = totalCount - winCount;
+    // 改為純 HTML 介面更新，不依賴任何外部圖表 Canvas
+    function updateUiStats(totalCount, winCount) {
       const winRate = totalCount > 0 ? Math.round((winCount / totalCount) * 100) : 0;
       totalCountEl.textContent = totalCount;
       winCountEl.textContent = winCount;
       winRateEl.textContent = `${winRate}%`;
-      const data = {
-        labels: ['中獎', '沒中獎'],
-        datasets: [{ data: [winCount, loseCount], backgroundColor: ['#10b981', '#ef4444'], borderWidth: 0 }]
-      };
-      if (!chartInstance) {
-        chartInstance = new Chart(winnerChart, { type: 'pie', data, options: { responsive: true, plugins: { legend: { position: 'bottom' } } } });
-      } else {
-        chartInstance.data = data;
-        chartInstance.update();
-      }
+      
+      myProgressBar.style.width = `${winRate}%`;
+      myProgressText.textContent = `累計對獎 ${totalCount} 張，中獎率：${winRate}%`;
     }
 
     async function startCamera() {
@@ -566,7 +552,8 @@
       totalWins = 0;
       detectedNumbersEl.textContent = '尚未辨識';
       prizeResultEl.textContent = '尚未執行對獎';
-      renderChart(0, 0);
+      updateUiStats(0, 0);
+      myProgressText.textContent = "等待對獎數據...";
       statusText.textContent = '歷史對獎數據已刷新清除。';
     }
 
@@ -637,7 +624,7 @@
       await loadPrizeJson();
       updateUiLayout();
       syncCustomPrizeInputs(periodSelect.value);
-      renderChart(0, 0);
+      updateUiStats(0, 0);
     };
 
     periodSelect.addEventListener('change', () => {
