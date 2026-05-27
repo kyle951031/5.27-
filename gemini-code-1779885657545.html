@@ -250,7 +250,6 @@
       return `${start}-${end}月`;
     }
 
-    // 更新界面（只處理單一發票號碼）
     function updateResultsForSingleNumber(finalNumber, selectedPeriod) {
       if (!finalNumber) {
         detectedNumbersEl.textContent = '未偵測到有效 8 碼號碼';
@@ -342,7 +341,7 @@
       const w = sourceCanvas.width;
       const h = sourceCanvas.height;
       
-      const scale = 2.0; // 放大至 2 倍，讓數字字元邊緣極致清晰
+      const scale = 2.0; 
       const canvas = document.createElement('canvas');
       canvas.width = Math.floor(w * scale);
       canvas.height = Math.floor(h * scale);
@@ -434,7 +433,6 @@
     function cropGuideArea(sourceCanvas) {
       const w = sourceCanvas.width;
       const h = sourceCanvas.height;
-      // 縮小核心瞄準框範圍（更精準貼合發票號碼，排除大範圍雜訊）
       const cropW = Math.floor(w * 0.80);
       const cropH = Math.floor(h * 0.20);
       const sx = Math.floor((w - cropW) / 2);
@@ -448,15 +446,8 @@
       return canvas;
     }
 
-    /**
-     * 精準化核心改良：
-     * 利用 Tesseract 的 word.bbox 計算文字方塊的面積大小。
-     * 發票號碼的字體在觀景窗中一定是最大的，藉此百分之百剔除其他小字。
-     */
     async function recognizeSingleBestInvoice(processedCanvas) {
-      const candidatesMap = new Map(); // 用來存儲數字與對應最大面積
-
-      // 使用 PSM 7 (單行文字) 與 6 (單一均勻文本塊)
+      const candidatesMap = new Map(); 
       const targetPsms = [7, 6]; 
 
       for (const psm of targetPsms) {
@@ -474,14 +465,12 @@
           if (result.data && result.data.words) {
             result.data.words.forEach(word => {
               const cleanedWordText = normalizeText(word.text);
-              // 使用正則提取 8 碼數字
               const regexPattern = /(?:\d[\s\-_.\/\\,]*){8}/g;
               const matches = cleanedWordText.match(regexPattern) || [];
 
               matches.forEach((rawMatch) => {
                 const pureDigits = rawMatch.replace(/[^\d]/g, '');
                 if (pureDigits.length === 8 && isValidInvoiceCandidate(pureDigits)) {
-                  // 計算該區塊的文字面積大小
                   const box = word.bbox;
                   const area = (box.x1 - box.x0) * (box.y1 - box.y0);
                   
@@ -499,7 +488,6 @@
 
       if (candidatesMap.size === 0) return null;
 
-      // 排序找出文字印出來「面積最大」的那個號碼（即核心發票號碼）
       const sortedByArea = Array.from(candidatesMap.entries()).sort((a, b) => b[1] - a[1]);
       return sortedByArea[0][0]; 
     }
